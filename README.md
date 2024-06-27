@@ -33,3 +33,4 @@ ANTHROPIC_API_KEY = "your-api-key"
 
 ## Disclaimer
 This is a simple tool and should be used with caution. It is not recommended to use it to generate large datasets for fine-tuning.
+This is only for times when you need to verify and edit the synthetic data that you get from claude. If you want an automated solution, this is not the right tool for you.
