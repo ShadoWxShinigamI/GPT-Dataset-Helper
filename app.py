@@ -18,18 +18,16 @@ def get_claude_response(system_prompt, messages, max_tokens):
     )
     return response.content[0].text
 
-# Custom JSON encoder to handle special characters
 class SafeJSONEncoder(json.JSONEncoder):
     def encode(self, obj):
         return super(SafeJSONEncoder, self).encode(obj).replace("&", "\\u0026").replace("<", "\\u003c").replace(">", "\\u003e")
 
-# Function to safely save conversation
 def safe_save_conversation(conversation):
     with open(JSONL_FILE, "a") as f:
         json.dump(conversation, f, cls=SafeJSONEncoder)
         f.write("\n")
 
-# Custom CSS for dark mode
+# Custom CSS for improved UI
 st.markdown("""
 <style>
     .main {
@@ -89,13 +87,11 @@ st.markdown("""
     .stSlider>div>div>div>div>div {
         color: #D4D4D4 !important;
     }
-    /* Custom styles for number input */
     .stNumberInput>div>div>input {
         background-color: #2D2D2D;
         color: #D4D4D4;
         border: 1px solid #3E3E3E;
     }
-    /* Style for info boxes */
     .stAlert {
         background-color: #2D2D2D;
         color: #D4D4D4;
@@ -112,11 +108,11 @@ if 'conversation' not in st.session_state:
 if 'system_prompt' not in st.session_state:
     st.session_state.system_prompt = "You are a helpful assistant."
 if 'editing' not in st.session_state:
-    st.session_state.editing = False
+    st.session_state.editing = -1
 if 'max_tokens' not in st.session_state:
     st.session_state.max_tokens = 1000
 
-# Sidebar for system prompt and file operations
+# Sidebar
 with st.sidebar:
     st.header("Configuration")
     st.session_state.system_prompt = st.text_area("System Prompt", st.session_state.system_prompt, height=100)
@@ -147,84 +143,68 @@ with st.sidebar:
             )
 
 # Main conversation area
-st.subheader("Current Conversation")
-conversation_placeholder = st.empty()
+st.header("Current Conversation")
 
-# Function to display conversation
-def display_conversation():
-    with conversation_placeholder.container():
-        for message in st.session_state.conversation:
-            if message['role'] == 'user':
-                st.markdown(f"<div class='user-message'>🧑 User: {message['content']}</div>", unsafe_allow_html=True)
-            else:
-                st.markdown(f"<div class='assistant-message'>🤖 Assistant: {message['content']}</div>", unsafe_allow_html=True)
-
-display_conversation()
-
-# User input and send button
-with st.form(key='message_form'):
-    user_message = st.text_area("Type your message here", key='user_message')
-    send_button = st.form_submit_button("Send Message")
-
-if send_button and user_message:
-    st.session_state.conversation.append({"role": "user", "content": user_message})
-    with st.spinner("Claude is thinking..."):
-        claude_response = get_claude_response(st.session_state.system_prompt, st.session_state.conversation, st.session_state.max_tokens)
-    st.session_state.conversation.append({"role": "assistant", "content": claude_response})
-    st.session_state.editing = True
-    st.experimental_rerun()
-
-# Edit Assistant Message
-if st.session_state.editing and st.session_state.conversation:
-    last_assistant_message = next((m for m in reversed(st.session_state.conversation) if m['role'] == 'assistant'), None)
-    if last_assistant_message:
-        st.subheader("Edit Assistant's Last Response")
-        edited_response = st.text_area("Edit response", last_assistant_message['content'], height=150)
-        col1, col2, col3 = st.columns(3)
+for i, message in enumerate(st.session_state.conversation):
+    if message['role'] == 'user':
+        st.markdown(f"<div class='user-message'>🧑 User: {message['content']}</div>", unsafe_allow_html=True)
+    else:
+        col1, col2 = st.columns([0.9, 0.1])
         with col1:
-            if st.button("Update Response"):
-                last_assistant_message['content'] = edited_response
-                st.session_state.editing = False
+            st.markdown(f"<div class='assistant-message'>🤖 Assistant: {message['content']}</div>", unsafe_allow_html=True)
+        with col2:
+            if st.button("✏️", key=f"edit_{i}"):
+                st.session_state.editing = i
+
+    if st.session_state.editing == i:
+        edited_response = st.text_area(f"Edit response", message['content'], key=f"edit_area_{i}")
+        col1, col2 = st.columns(2)
+        with col1:
+            if st.button("Update", key=f"update_{i}"):
+                st.session_state.conversation[i]['content'] = edited_response
+                st.session_state.editing = -1
                 st.experimental_rerun()
         with col2:
-            if st.button("Continue Without Editing"):
-                st.session_state.editing = False
-                st.experimental_rerun()
-        with col3:
-            if st.button("Retry Response", key="retry"):
-                st.session_state.conversation.pop()  # Remove last assistant message
-                with st.spinner("Claude is thinking..."):
-                    new_response = get_claude_response(st.session_state.system_prompt, st.session_state.conversation, st.session_state.max_tokens)
-                st.session_state.conversation.append({"role": "assistant", "content": new_response})
+            if st.button("Cancel", key=f"cancel_{i}"):
+                st.session_state.editing = -1
                 st.experimental_rerun()
 
-# Action buttons
-col1, col2 = st.columns(2)
+# User input
+user_message = st.text_area("Your message", key='user_message', height=100)
+col1, col2, col3 = st.columns([1,1,2])
 with col1:
-    if st.button("Accept and Save Conversation", key="save"):
-        if st.session_state.conversation:
-            openai_format = {
-                "messages": [{"role": "system", "content": st.session_state.system_prompt}] + st.session_state.conversation
-            }
-            safe_save_conversation(openai_format)
-            st.success("Conversation saved successfully!")
-            st.session_state.conversation = []
-            st.session_state.editing = False
+    if st.button("Send", use_container_width=True):
+        if user_message:
+            st.session_state.conversation.append({"role": "user", "content": user_message})
+            with st.spinner("Claude is thinking..."):
+                claude_response = get_claude_response(st.session_state.system_prompt, st.session_state.conversation, st.session_state.max_tokens)
+            st.session_state.conversation.append({"role": "assistant", "content": claude_response})
             st.experimental_rerun()
-
 with col2:
-    if st.button("Discard Conversation", key="discard", type="primary"):
+    if st.button("Clear", use_container_width=True):
         st.session_state.conversation = []
-        st.session_state.editing = False
-        st.success("Conversation discarded.")
+        st.session_state.editing = -1
+        st.success("Conversation cleared.")
+        st.experimental_rerun()
+
+# Save conversation
+if st.button("Save Conversation", use_container_width=True):
+    if st.session_state.conversation:
+        openai_format = {
+            "messages": [{"role": "system", "content": st.session_state.system_prompt}] + st.session_state.conversation
+        }
+        safe_save_conversation(openai_format)
+        st.success("Conversation saved successfully!")
+        st.session_state.conversation = []
+        st.session_state.editing = -1
         st.experimental_rerun()
 
 # Display saved conversations
 if os.path.exists(JSONL_FILE):
-    st.subheader("Recent Saved Conversations")
+    st.header("Recent Saved Conversations")
     with open(JSONL_FILE, "r") as f:
         conversations = [json.loads(line) for line in f]
-        for i, conversation in enumerate(conversations[-3:], 1):  # Show last 3 conversations
+        for i, conversation in enumerate(conversations[-3:], 1):
             with st.expander(f"Conversation {len(conversations)-3+i}"):
                 for message in conversation['messages']:
                     st.write(f"{message['role'].capitalize()}: {message['content']}")
