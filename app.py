@@ -11,7 +11,7 @@ JSONL_FILE = "conversations.jsonl"
 
 def get_claude_response(system_prompt, messages, max_tokens):
     response = client.messages.create(
-        model="claude-3-5-sonnet-20240620",
+        model="claude-3-5-sonnet-20240620", #claude-3-haiku-20240307, claude-3-sonnet-20240229, claude-3-opus-20240229
         max_tokens=max_tokens,
         system=system_prompt,
         messages=messages
@@ -149,12 +149,20 @@ for i, message in enumerate(st.session_state.conversation):
     if message['role'] == 'user':
         st.markdown(f"<div class='user-message'>🧑 User: {message['content']}</div>", unsafe_allow_html=True)
     else:
-        col1, col2 = st.columns([0.9, 0.1])
+        col1, col2, col3 = st.columns([0.8, 0.1, 0.1])
         with col1:
             st.markdown(f"<div class='assistant-message'>🤖 Assistant: {message['content']}</div>", unsafe_allow_html=True)
         with col2:
             if st.button("✏️", key=f"edit_{i}"):
                 st.session_state.editing = i
+        with col3:
+            if i == len(st.session_state.conversation) - 1 and message['role'] == 'assistant':
+                if st.button("🔄", key=f"retry_{i}"):
+                    with st.spinner("Retrying..."):
+                        st.session_state.conversation.pop()  # Remove the last assistant message
+                        new_response = get_claude_response(st.session_state.system_prompt, st.session_state.conversation, st.session_state.max_tokens)
+                        st.session_state.conversation.append({"role": "assistant", "content": new_response})
+                    st.experimental_rerun()
 
     if st.session_state.editing == i:
         edited_response = st.text_area(f"Edit response", message['content'], key=f"edit_area_{i}")
